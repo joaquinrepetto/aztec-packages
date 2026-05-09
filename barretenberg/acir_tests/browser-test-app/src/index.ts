@@ -105,7 +105,24 @@ function installChonkGlobal() {
     return { proof, verificationKey };
   }
 
+  async function verifyChonk(
+    proof: Uint8Array,
+    verificationKey: Uint8Array,
+    threads = 1
+  ): Promise<boolean> {
+    const { AztecClientBackend } = await import("@aztec/bb.js");
+
+    const bb = await Barretenberg.new({ threads, logger: bbLogger });
+    const backend = new AztecClientBackend([], bb, []);
+    try {
+      return await backend.verify(proof, verificationKey);
+    } finally {
+      await bb.destroy();
+    }
+  }
+
   (window as any).proveChonk = proveChonk;
+  (window as any).verifyChonk = verifyChonk;
 }
 
 installChonkGlobal();
