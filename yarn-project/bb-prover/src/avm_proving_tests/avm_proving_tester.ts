@@ -1,12 +1,14 @@
 import type { AvmStat } from '@aztec/bb.js';
 import { Timer } from '@aztec/foundation/timer';
 import {
+  type MeasuredSimulatorFactory,
   PublicTxSimulationTester,
   SimpleContractDataSource,
   type TestEnqueuedCall,
   type TestExecutorMetrics,
   type TestPrivateInsertions,
 } from '@aztec/simulator/public/fixtures';
+import { CdbIpcServer, MeasuredCppPublicTxSimulator, PublicContractsDB } from '@aztec/simulator/server';
 import type { PublicTxResult } from '@aztec/simulator/server';
 import { AvmCircuitInputs, AvmCircuitPublicInputs, PublicSimulatorConfig } from '@aztec/stdlib/avm';
 import { AztecAddress } from '@aztec/stdlib/aztec-address';
@@ -40,9 +42,9 @@ export class AvmProvingTester extends PublicTxSimulationTester {
     merkleTrees: MerkleTreeWriteOperations,
     globals?: GlobalVariables,
     metrics?: TestExecutorMetrics,
+    simulatorFactory?: MeasuredSimulatorFactory,
   ) {
-    // simulator factory is undefined because for proving, we use the default C++ simulator
-    super(merkleTrees, contractDataSource, globals, metrics, /*simulatorFactory=*/ undefined, provingConfig);
+    super(merkleTrees, contractDataSource, globals, metrics, simulatorFactory, provingConfig);
   }
 
   static async new(
@@ -53,7 +55,40 @@ export class AvmProvingTester extends PublicTxSimulationTester {
   ) {
     const contractDataSource = new SimpleContractDataSource();
     const merkleTrees = await worldStateService.fork();
-    return new AvmProvingTester(checkCircuitOnly, contractDataSource, merkleTrees, globals, metrics);
+
+    // Set up IPC simulator (replaces the old NAPI default)
+    const wsdbSocketPath = worldStateService.getSocketPath();
+    const { AvmBackend } = await import('@aztec/bb.js/aztec-avm');
+    const { findAvmBinary } = await import('@aztec/bb.js/platform');
+    const avmBinaryPath = findAvmBinary();
+    if (!avmBinaryPath) {
+      throw new Error('aztec-avm binary not found');
+    }
+
+    const cdbServer = new CdbIpcServer();
+    const contractsDB = new PublicContractsDB(contractDataSource);
+    const forkId = merkleTrees.getRevision().forkId;
+    cdbServer.registerFork(forkId, contractsDB, globals?.timestamp ?? 0n);
+
+    const avmBackend = new AvmBackend({
+      binaryPath: avmBinaryPath,
+      wsdbSocketPath,
+      cdbSocketPath: cdbServer.socketPath,
+    });
+    const simulatorFactory: MeasuredSimulatorFactory = (_mt, _cdb, g, m, c) =>
+      new MeasuredCppPublicTxSimulator(avmBackend, g, m, c, undefined, forkId);
+
+    const tester = new AvmProvingTester(
+      checkCircuitOnly,
+      contractDataSource,
+      merkleTrees,
+      globals,
+      metrics,
+      simulatorFactory,
+    );
+    tester.avmBackend = avmBackend;
+    tester.cdbServer = cdbServer;
+    return tester;
   }
 
   /**
@@ -166,7 +201,6 @@ export class AvmProvingTester extends PublicTxSimulationTester {
     teardownCall?: TestEnqueuedCall,
     feePayer?: AztecAddress,
     privateInsertions?: TestPrivateInsertions,
-    gasLimits?: Gas,
   ) {
     return await this.simProveVerify(
       sender,
@@ -178,7 +212,6 @@ export class AvmProvingTester extends PublicTxSimulationTester {
       privateInsertions,
       txLabel,
       true,
-      gasLimits,
     );
   }
 

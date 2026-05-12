@@ -88,6 +88,7 @@ describe('AVM check-circuit - contract updates', () => {
         /*teardownCall=*/ undefined,
         /*expectRevert=*/ false,
       );
+      await tester.close();
     },
     TIMEOUT,
   );
@@ -128,6 +129,7 @@ describe('AVM check-circuit - contract updates', () => {
           /*expectRevert=*/ false,
         ),
       ).rejects.toThrow();
+      await tester.close();
     },
     TIMEOUT,
   );
@@ -165,6 +167,7 @@ describe('AVM check-circuit - contract updates', () => {
         /*teardownCall=*/ undefined,
         /*expectRevert=*/ false,
       );
+      await tester.close();
     },
     TIMEOUT,
   );
@@ -204,6 +207,7 @@ describe('AVM check-circuit - contract updates', () => {
           /*expectRevert=*/ false,
         ),
       ).rejects.toThrow();
+      await tester.close();
     },
     TIMEOUT,
   );

@@ -17,6 +17,6 @@ function loadNativeModule(): Record<string, NativeClassCtor> {
   return require(napiPath);
 }
 
-const nativeModule: Record<string, NativeClassCtor | Function> = loadNativeModule();
+const nativeModule: Record<string, NativeClassCtor> = loadNativeModule();
 
 export const NativeLMDBStore: NativeClassCtor = nativeModule.LMDBStore as NativeClassCtor;

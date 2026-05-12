@@ -164,6 +164,7 @@ export function findWsdbBinary(customPath?: string): string | null {
  * @returns Absolute path to aztec-avm binary, or null if not found
  */
 export function findAvmBinary(customPath?: string): string | null {
+  // Check env var first (used in Docker images)
   const envPath = customPath ?? process.env.AVM_BINARY_PATH;
   if (envPath) {
     if (fs.existsSync(envPath)) {
