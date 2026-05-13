@@ -25,7 +25,7 @@ import { join } from 'path';
 import { WorldStateInstrumentation } from '../instrumentation/instrumentation.js';
 import type { WorldStateTreeMapSizes } from '../synchronizer/factory.js';
 import type { MerkleTreeAdminDatabase as MerkleTreeDatabase } from '../world-state-db/merkle_tree_db.js';
-import { IpcWorldState } from './ipc_world_state_instance.js';
+import { IpcWorldState, type WsdbIpcBackend } from './ipc_world_state_instance.js';
 import { MerkleTreesFacade, MerkleTreesForkFacade, serializeLeaf } from './merkle_trees_facade.js';
 import {
   WorldStateMessageType,
@@ -145,6 +145,26 @@ export class NativeWorldStateService implements MerkleTreeDatabase {
       log.error(`Error initializing tmp world state: ${e}`);
       throw e;
     }
+    return worldState;
+  }
+
+  /**
+   * Wrap an already-spawned WsdbIpcBackend in a NativeWorldStateService. Used by callers
+   * that own the backend lifecycle separately (e.g. the prover-node, which shares one
+   * aztec-wsdb across world-state, AVM, and CDB clients).
+   */
+  static async fromIpc(
+    wsdbBackend: WsdbIpcBackend,
+    instrumentation = new WorldStateInstrumentation(getTelemetryClient()),
+    bindings?: LoggerBindings,
+    genesis: GenesisData = EMPTY_GENESIS_DATA,
+    cleanup = () => Promise.resolve(),
+    recreateInstance?: () => Promise<NativeWorldStateInstance>,
+  ): Promise<NativeWorldStateService> {
+    const log = createLogger('world-state:database', bindings);
+    const instance = new IpcWorldState(wsdbBackend, instrumentation, bindings);
+    const worldState = new this(instance, instrumentation, log, genesis, cleanup, recreateInstance);
+    await worldState.init();
     return worldState;
   }
 
@@ -285,6 +305,10 @@ export class NativeWorldStateService implements MerkleTreeDatabase {
     } finally {
       await this.cleanup();
     }
+  }
+
+  async [Symbol.asyncDispose](): Promise<void> {
+    await this.close();
   }
 
   private async buildInitialHeader(): Promise<BlockHeader> {
