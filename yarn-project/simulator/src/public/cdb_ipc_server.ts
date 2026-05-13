@@ -289,7 +289,7 @@ export class CdbIpcServer {
       case 'CdbAddContracts': {
         const { db } = this.getFork(forkId);
         const contractDeploymentData = ContractDeploymentData.fromPlainObject(payload.contractDeploymentData);
-        db.addContracts(contractDeploymentData);
+        db.addContractsFromLogs(contractDeploymentData);
         return ['CdbAddContractsResponse', {}];
       }
 
