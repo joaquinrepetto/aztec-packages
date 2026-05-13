@@ -6,6 +6,9 @@
 #include "barretenberg/srs/factories/bn254_crs_data.hpp"
 #include "barretenberg/srs/factories/bn254_g1_chunk_hashes.hpp"
 #include "barretenberg/srs/factories/get_bn254_crs.hpp"
+#include "barretenberg/srs/factories/get_grumpkin_crs.hpp"
+#include "barretenberg/srs/factories/grumpkin_crs_data.hpp"
+#include "barretenberg/srs/factories/grumpkin_srs_gen.hpp"
 #include "barretenberg/srs/factories/mem_bn254_crs_factory.hpp"
 #include "barretenberg/srs/factories/mem_grumpkin_crs_factory.hpp"
 #include "barretenberg/srs/factories/native_crs_factory.hpp"
@@ -99,6 +102,27 @@ TEST(CrsFactory, grumpkin)
     // Tiny download check to test the 'net CRS' path
     ASSERT_ANY_THROW(check_grumpkin_consistency(temp_crs_path, 1, /*allow_download=*/false));
     check_grumpkin_consistency(temp_crs_path, 1, /*allow_download=*/true);
+}
+
+// Check the hash of the local dat file matches the pre-computed expected hash.
+TEST(CrsFactory, GrumpkinG1OnDiskMatchesPinnedHash)
+{
+    auto data = bb::read_file(bb::srs::bb_crs_path() / "grumpkin_g1.flat.dat", bb::srs::GRUMPKIN_G1_SIZE_BYTES);
+    ASSERT_EQ(data.size(), bb::srs::GRUMPKIN_G1_SIZE_BYTES);
+    auto hash = bb::crypto::sha256(std::span<const uint8_t>(data.data(), data.size()));
+    EXPECT_EQ(hash, bb::srs::GRUMPKIN_G1_SHA256);
+}
+
+// Derives grumpkin SRS and checks if its hash matches the pre-computed hash.
+// The test should fail if the Grumpkin SRS is updated, in which case you need to update the
+// pre-computed hash GRUMPKIN_G1_SHA256.
+TEST(CrsFactory, GrumpkinG1GeneratorMatchesPinnedHash)
+{
+    auto points = bb::srs::generate_grumpkin_srs(bb::srs::GRUMPKIN_G1_NUM_POINTS);
+    auto bytes = to_buffer(points);
+    ASSERT_EQ(bytes.size(), bb::srs::GRUMPKIN_G1_SIZE_BYTES);
+    auto hash = bb::crypto::sha256(std::span<const uint8_t>(bytes.data(), bytes.size()));
+    EXPECT_EQ(hash, bb::srs::GRUMPKIN_G1_SHA256);
 }
 
 // TODO: Re-enable once g1_compressed.dat is deployed to S3 fallback
