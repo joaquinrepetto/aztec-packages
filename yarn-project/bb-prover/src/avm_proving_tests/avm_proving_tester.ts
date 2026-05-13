@@ -56,23 +56,11 @@ export class AvmProvingTester extends PublicTxSimulationTester {
     const contractDataSource = new SimpleContractDataSource();
     const merkleTrees = await worldStateService.fork();
 
-    // Set up IPC simulator (replaces the old NAPI default)
-    const wsdbSocketPath = worldStateService.getSocketPath();
-    const { AvmBackend } = await import('@aztec/bb.js/aztec-avm');
-    const { findAvmBinary } = await import('@aztec/bb.js/platform');
-    const avmBinaryPath = findAvmBinary();
-    if (!avmBinaryPath) {
-      throw new Error('aztec-avm binary not found');
-    }
-
-    const cdbServer = new CdbIpcServer();
-    const contractsDB = new PublicContractsDB(contractDataSource);
     const forkId = merkleTrees.getRevision().forkId;
-    cdbServer.registerFork(forkId, contractsDB, globals?.timestamp ?? 0n);
-
-    const avmBackend = new AvmBackend({
-      binaryPath: avmBinaryPath,
-      wsdbSocketPath,
+    const cdbServer = new CdbIpcServer();
+    cdbServer.registerFork(forkId, new PublicContractsDB(contractDataSource), globals?.timestamp ?? 0n);
+    const avmBackend = await AvmSimulatorPool.spawn({
+      wsdbSocketPath: worldStateService.getSocketPath(),
       cdbSocketPath: cdbServer.socketPath,
     });
     const simulatorFactory: MeasuredSimulatorFactory = (_mt, _cdb, g, m, c) =>
