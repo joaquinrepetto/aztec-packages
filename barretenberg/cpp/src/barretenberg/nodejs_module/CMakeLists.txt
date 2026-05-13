@@ -27,7 +27,10 @@ string(REGEX REPLACE "[\r\n\"]" "" NODE_API_HEADERS_DIR ${NODE_API_HEADERS_DIR})
 add_library(nodejs_module SHARED ${SOURCE_FILES})
 set_target_properties(nodejs_module PROPERTIES PREFIX "" SUFFIX ".node")
 target_include_directories(nodejs_module PRIVATE ${NODE_API_HEADERS_DIR} ${NODE_ADDON_API_DIR})
-target_link_libraries(nodejs_module PRIVATE world_state ipc)
+# nodejs_module is now a thin SHM-transport stub. It only needs the IPC primitives;
+# the world_state link (previously required by LMDBStore) is gone with the move to
+# the standalone aztec-kvdb binary.
+target_link_libraries(nodejs_module PRIVATE ipc)
 
 # On macOS, Node.js N-API symbols are provided by the runtime, not at link time
 if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
