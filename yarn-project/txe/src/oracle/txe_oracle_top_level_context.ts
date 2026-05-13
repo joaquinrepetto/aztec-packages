@@ -70,6 +70,7 @@ import {
   PrivateToPublicAccumulatedData,
   PublicCallRequest,
 } from '@aztec/stdlib/kernel';
+import type { PrivateLog } from '@aztec/stdlib/logs';
 import { ChonkProof } from '@aztec/stdlib/proofs';
 import { makeGlobalVariables } from '@aztec/stdlib/testing';
 import { MerkleTreeId } from '@aztec/stdlib/trees';
@@ -172,10 +173,15 @@ export class TXEOracleTopLevelContext implements IMiscOracle, ITxeExecutionOracl
   }
 
   async getLastBlockTimestamp() {
-    return (await this.stateMachine.node.getBlockHeader('latest'))!.globalVariables.timestamp;
+    return (await this.stateMachine.node.getBlockData('latest'))!.header.globalVariables.timestamp;
   }
 
-  async getLastTxEffects() {
+  async getLastTxEffects(): Promise<{
+    txHash: TxHash;
+    noteHashes: Fr[];
+    nullifiers: Fr[];
+    privateLogs: PrivateLog[];
+  }> {
     const latestBlockNumber = await this.stateMachine.archiver.getBlockNumber();
     const block = await this.stateMachine.archiver.getBlock({ number: latestBlockNumber });
 
@@ -412,7 +418,7 @@ export class TXEOracleTopLevelContext implements IMiscOracle, ITxeExecutionOracl
       senderForTags: from,
       simulator,
       messageContextService: this.stateMachine.messageContextService,
-      l2TipsStore: this.stateMachine.node,
+      l2TipsStore: this.stateMachine.l2TipsProvider,
       hooks: composeHooks({
         authorizeUtilityCall: this.buildAuthorizeUtilityCallHook('private', authorizedUtilityCallTargets),
       }),
@@ -796,7 +802,7 @@ export class TXEOracleTopLevelContext implements IMiscOracle, ITxeExecutionOracl
         privateEventStore: this.privateEventStore,
         messageContextService: this.stateMachine.messageContextService,
         contractSyncService: this.stateMachine.contractSyncService,
-        l2TipsStore: this.stateMachine.node,
+        l2TipsStore: this.stateMachine.l2TipsProvider,
         jobId,
         scopes,
         simulator,
@@ -832,8 +838,8 @@ export class TXEOracleTopLevelContext implements IMiscOracle, ITxeExecutionOracl
   }
 
   private async getLastBlockNumber(): Promise<BlockNumber> {
-    const header = await this.stateMachine.node.getBlockHeader('latest');
-    return header ? header.globalVariables.blockNumber : BlockNumber.ZERO;
+    const block = await this.stateMachine.node.getBlock('latest');
+    return block ? block.header.globalVariables.blockNumber : BlockNumber.ZERO;
   }
 
   private buildAuthorizeUtilityCallHook(

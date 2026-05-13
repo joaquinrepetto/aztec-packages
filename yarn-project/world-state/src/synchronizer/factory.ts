@@ -53,7 +53,7 @@ export async function createWorldState(
     | 'messageTreeMapSizeKb'
     | 'publicDataTreeMapSizeKb'
   > &
-    Pick<DataStoreConfig, 'dataDirectory' | 'dataStoreMapSizeKb' | 'l1Contracts'>,
+    Pick<DataStoreConfig, 'dataDirectory' | 'dataStoreMapSizeKb' | 'rollupAddress'>,
   genesis: GenesisData = EMPTY_GENESIS_DATA,
   instrumentation: WorldStateInstrumentation = new WorldStateInstrumentation(getTelemetryClient()),
   bindings?: LoggerBindings,
@@ -82,14 +82,14 @@ export async function createWorldState(
     publicDataTreeMapSizeKb: config.publicDataTreeMapSizeKb ?? dataStoreMapSizeKb,
   };
 
-  if (!config.l1Contracts?.rollupAddress) {
+  if (!config.rollupAddress) {
     throw new Error('Rollup address is required to create a world state synchronizer.');
   }
 
   // If a data directory is provided in config, then create a persistent store.
   const merkleTrees = dataDirectory
     ? await NativeWorldStateService.new(
-        config.l1Contracts.rollupAddress,
+        config.rollupAddress,
         dataDirectory,
         wsTreeMapSizes,
         genesis,
