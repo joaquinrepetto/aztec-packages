@@ -19,7 +19,7 @@ import { NativeWorldStateService } from '@aztec/world-state';
 
 import path from 'path';
 
-import { BBJsProverFactory } from '../bb/bb_js_backend.js';
+import { BBJsFactory } from '../bb/bb_js_backend.js';
 
 const BB_PATH = path.resolve('../../barretenberg/cpp/build/bin/bb-avm');
 
@@ -34,7 +34,7 @@ const provingConfig: PublicSimulatorConfig = PublicSimulatorConfig.from({
 });
 
 export class AvmProvingTester extends PublicTxSimulationTester {
-  private readonly bbJsFactory = new BBJsProverFactory(BB_PATH);
+  private readonly bbJsFactory = new BBJsFactory(BB_PATH);
 
   constructor(
     private checkCircuitOnly: boolean,
@@ -87,13 +87,15 @@ export class AvmProvingTester extends PublicTxSimulationTester {
     const inputsBuffer = avmCircuitInputs.serializeWithMessagePack();
 
     if (this.checkCircuitOnly) {
-      const { passed, stats } = await this.bbJsFactory.withFreshInstance(i => i.checkAvmCircuit(inputsBuffer));
+      await using instance = await this.bbJsFactory.getInstance();
+      const { passed, stats } = await instance.checkAvmCircuit(inputsBuffer);
       this.recordProverMetrics(stats, txLabel);
       expect(passed).toBe(true);
       return [];
     }
 
-    const { proof, stats } = await this.bbJsFactory.withFreshInstance(i => i.generateAvmProof(inputsBuffer));
+    await using instance = await this.bbJsFactory.getInstance();
+    const { proof, stats } = await instance.generateAvmProof(inputsBuffer);
     this.recordProverMetrics(stats, txLabel);
     return proof;
   }
@@ -104,7 +106,8 @@ export class AvmProvingTester extends PublicTxSimulationTester {
       return;
     }
     const piBuffer = publicInputs.serializeWithMessagePack();
-    const { verified } = await this.bbJsFactory.withFreshInstance(i => i.verifyAvmProof(proof, piBuffer));
+    await using instance = await this.bbJsFactory.getInstance();
+    const { verified } = await instance.verifyAvmProof(proof, piBuffer);
     expect(verified).toBe(true);
   }
 
