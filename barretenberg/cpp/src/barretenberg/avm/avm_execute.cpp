@@ -78,10 +78,14 @@ AvmSimulate::Response AvmSimulate::execute(AvmRequest& request) &&
     g_active_cancellation_token.store(cancellation_token.get(), std::memory_order_release);
 
     try {
-        // Create revision pointing to the fork
+        // Create revision pointing to the fork. blockNumber = LATEST sentinel routes the WSDB
+        // through its non-historical (current-state) path so the fork's uncommitted leaves are
+        // visible. Using 0 here makes the WSDB treat the query as historical against the empty
+        // genesis tree, missing any in-fork uncommitted state (e.g. contracts deployed by an
+        // earlier tx in the same block).
         WorldStateRevision revision = {
             .forkId = fork_id,
-            .blockNumber = 0,
+            .blockNumber = WorldStateRevision::LATEST,
             .includeUncommitted = true,
         };
 
