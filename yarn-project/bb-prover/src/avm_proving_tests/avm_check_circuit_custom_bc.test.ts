@@ -112,6 +112,7 @@ describe('AVM custom bytecodes truncation', () => {
   });
 
   afterEach(async () => {
+    await tester.close();
     await worldStateService.close();
   });
 
