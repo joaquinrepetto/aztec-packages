@@ -56,18 +56,14 @@ AvmSimulate::Response AvmSimulate::execute(AvmRequest& request) &&
     // Deserialize AvmFastSimulationInputs from opaque bytes
     auto sim_inputs = deserialize_from_msgpack<AvmFastSimulationInputs>(inputs);
 
-    // If a fork ID was provided (block builder's fork), use it directly.
-    // Otherwise create a temporary fork for this simulation.
-    const bool use_external_fork = sim_inputs.ws_revision.forkId != 0;
+    // Always use the externally-provided forkId. The caller (TXE / PublicProcessor) is
+    // responsible for creating the WSDB fork AND registering its contractsDB on the CDB
+    // server before invoking AvmSimulate. Previously we treated forkId == 0 as
+    // "no fork provided, create one here" — but 0 is a valid forkId (the genesis fork),
+    // and creating a fresh fork here meant CDB had no contractsDB registered for it,
+    // producing "no contracts DB registered for forkId N" errors at lookup time.
     uint64_t fork_id = sim_inputs.ws_revision.forkId;
-
-    if (!use_external_fork) {
-        auto fork_resp = request.wsdb_client.create_fork(wsdb::WsdbCreateFork{ .latest = true, .blockNumber = 0 });
-        fork_id = fork_resp.forkId;
-        vinfo("Created WSDB fork ", fork_id, " for AVM simulation");
-    } else {
-        vinfo("Using external WSDB fork ", fork_id, " for AVM simulation");
-    }
+    vinfo("Using external WSDB fork ", fork_id, " for AVM simulation");
 
     // Route CDB requests to the correct PublicContractsDB via fork ID
     request.cdb_client.set_fork_id(fork_id);
@@ -113,23 +109,11 @@ AvmSimulate::Response AvmSimulate::execute(AvmRequest& request) &&
 
         g_active_cancellation_token.store(nullptr, std::memory_order_release);
 
-        // Only clean up fork if we created it
-        if (!use_external_fork) {
-            request.wsdb_client.delete_fork(wsdb::WsdbDeleteFork{ .forkId = fork_id });
-        }
+        // Fork lifecycle is owned by the caller; nothing to clean up here.
 
         return Response{ .result = serialize_to_msgpack(result) };
     } catch (...) {
         g_active_cancellation_token.store(nullptr, std::memory_order_release);
-
-        // Only clean up fork on error if we created it
-        if (!use_external_fork) {
-            try {
-                request.wsdb_client.delete_fork(wsdb::WsdbDeleteFork{ .forkId = fork_id });
-            } catch (...) {
-                // Ignore cleanup errors
-            }
-        }
         throw;
     }
 }
