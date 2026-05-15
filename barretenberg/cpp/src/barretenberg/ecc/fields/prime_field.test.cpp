@@ -18,6 +18,7 @@
 #include "barretenberg/ecc/curves/bn254/fr.hpp"
 #include "barretenberg/ecc/curves/secp256k1/secp256k1.hpp"
 #include "barretenberg/ecc/curves/secp256r1/secp256r1.hpp"
+#include "barretenberg/ecc/fields/bernstein_yang_inverse_wasm.hpp"
 #include "barretenberg/numeric/random/engine.hpp"
 #include "barretenberg/numeric/uint256/uint256.hpp"
 #include "barretenberg/serialize/test_helper.hpp"
@@ -337,6 +338,36 @@ TYPED_TEST(PrimeFieldTest, PowThree)
 
     F a = F::random_element();
     EXPECT_EQ(a.pow(uint256_t(3)), a * a * a);
+}
+
+// Exercise the WASM kernel on x86_64 CI without a wasmtime runner.
+namespace {
+template <class S, class F> void check_inverse_matches_modexp(size_t n)
+{
+    constexpr bb::numeric::uint256_t p = F::modulus;
+    constexpr uint64_t p_inv = S::p_inv_from_r_inv(F::Params::r_inv);
+    for (size_t i = 0; i < n; ++i) {
+        F a_field = F::random_element();
+        if (a_field == F::zero()) {
+            continue;
+        }
+        F a_nonmont = a_field.from_montgomery_form_reduced();
+        bb::numeric::uint256_t a{ a_nonmont.data[0], a_nonmont.data[1], a_nonmont.data[2], a_nonmont.data[3] };
+        bb::numeric::uint256_t got = bb::bernstein_yang::invert_bernsteinyang19<S>(a, p, p_inv);
+        F got_field{ got.data[0], got.data[1], got.data[2], got.data[3] };
+        got_field.self_to_montgomery_form();
+        EXPECT_EQ(got_field * a_field, F::one()) << "iteration " << i;
+    }
+}
+} // namespace
+
+TEST(Wasm9x29, MatchesModexp_BN254_Fr)
+{
+    check_inverse_matches_modexp<bb::bernstein_yang::Wasm9x29, bb::fr>(500);
+}
+TEST(Wasm9x29, MatchesModexp_BN254_Fq)
+{
+    check_inverse_matches_modexp<bb::bernstein_yang::Wasm9x29, bb::fq>(500);
 }
 
 // ================================
