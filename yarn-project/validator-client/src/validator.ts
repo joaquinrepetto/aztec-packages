@@ -124,7 +124,7 @@ export class ValidatorClient extends (EventEmitter as new () => WatcherEmitter) 
   private lastAttestedEpochByAttester: Map<string, EpochNumber> = new Map();
 
   private proposersOfInvalidBlocks = FifoSet.withLimit<string>(MAX_PROPOSERS_OF_INVALID_BLOCKS);
-  private slotsWithInvalidBlockProposals = FifoSet.withLimit<string>(MAX_TRACKED_INVALID_PROPOSAL_SLOTS);
+  private slotsWithInvalidProposals = FifoSet.withLimit<string>(MAX_TRACKED_INVALID_PROPOSAL_SLOTS);
   private invalidCheckpointProposalOffenseKeys = FifoSet.withLimit<string>(MAX_TRACKED_INVALID_CHECKPOINT_PROPOSALS);
   private slotsWithProposalEquivocation = FifoSet.withLimit<string>(MAX_TRACKED_INVALID_PROPOSAL_SLOTS);
   private badAttestationOffenseKeys = FifoSet.withLimit<string>(MAX_TRACKED_BAD_ATTESTATIONS);
@@ -523,8 +523,11 @@ export class ValidatorClient extends (EventEmitter as new () => WatcherEmitter) 
           this.log.warn(`Slashing proposer for invalid block proposal`, proposalInfo);
           this.slashInvalidBlock(proposal);
         }
-        if (slashAttestInvalidCheckpointProposalPenalty > 0n) {
-          this.markInvalidProposalSlot(proposal.slotNumber);
+        if (
+          slashAttestInvalidCheckpointProposalPenalty > 0n &&
+          this.slotsWithInvalidProposals.addIfAbsent(this.getSlotKey(proposal.slotNumber))
+        ) {
+          await this.processRetainedCheckpointAttestations(proposal.slotNumber);
         }
       }
       return false;
@@ -755,13 +758,20 @@ export class ValidatorClient extends (EventEmitter as new () => WatcherEmitter) 
     ]);
   }
 
-  private handleInvalidCheckpointProposal(
+  private async handleInvalidCheckpointProposal(
     proposal: CheckpointProposalCore,
     result: CheckpointProposalValidationFailureResult,
     proposalInfo: LogData,
-  ): void {
+  ): Promise<void> {
     if (!SLASHABLE_CHECKPOINT_PROPOSAL_VALIDATION_RESULT[result.reason]) {
       return;
+    }
+
+    if (
+      this.config.slashAttestInvalidCheckpointProposalPenalty > 0n &&
+      this.slotsWithInvalidProposals.addIfAbsent(this.getSlotKey(proposal.slotNumber))
+    ) {
+      await this.processRetainedCheckpointAttestations(proposal.slotNumber);
     }
 
     if (this.slashInvalidCheckpointProposal(proposal)) {
@@ -803,15 +813,24 @@ export class ValidatorClient extends (EventEmitter as new () => WatcherEmitter) 
     return true;
   }
 
-  private markInvalidProposalSlot(slotNumber: SlotNumber): void {
-    const slotKey = this.getSlotKey(slotNumber);
-    this.slotsWithInvalidBlockProposals.add(slotKey);
+  private async processRetainedCheckpointAttestations(slotNumber: SlotNumber): Promise<void> {
+    try {
+      const attestations = await this.p2pClient.getCheckpointAttestationsForSlot(slotNumber);
+      for (const attestation of attestations) {
+        this.handleCheckpointAttestation(attestation);
+      }
+    } catch (err) {
+      this.log.warn(`Failed to process retained checkpoint attestations for invalid proposal slot`, {
+        slotNumber,
+        err,
+      });
+    }
   }
 
   private handleCheckpointAttestation(attestation: CheckpointAttestation): void {
     const slotNumber = attestation.slotNumber;
     const slotKey = this.getSlotKey(slotNumber);
-    if (!this.slotsWithInvalidBlockProposals.has(slotKey) || this.slotsWithProposalEquivocation.has(slotKey)) {
+    if (!this.slotsWithInvalidProposals.has(slotKey) || this.slotsWithProposalEquivocation.has(slotKey)) {
       return;
     }
 
