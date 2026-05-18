@@ -30,7 +30,7 @@ include "../scalar_mul.pil";
  *               as an independent 'destination' trace which is purely responsible for address
  *               computation.
  *               This means we assume all public keys are not the point at infinity, and so use
- *               precomputed.zero to represent each key's is_infinity flag (see TODO(#7529)).
+ *               precomputed.zero to represent each key's is_infinity flag (see TODO(#7529) and PR #22462).
  *
  * USAGE: To enforce that an address is correctly derived from all preimage members
  *        (adapted from #[ADDRESS_DERIVATION] in contract_instance_retrieval.pil):
@@ -184,7 +184,9 @@ namespace address_derivation;
     // 3. Computation of public keys hash
     pol commit public_keys_hash;
 
-    // TODO(#7529): Remove all the 0s for is_infinity when removed from public_keys.nr
+    // TODO(#AVM-266): Remove infinity flags from point representation. Note that we may still need to use
+    // precomputed.zero in the hash preimages until address derivation removes them:
+    // TODO(#7529)/TODO(F-553): Remove all the 0s for is_infinity when removed from public_keys.nr
     // https://github.com/AztecProtocol/aztec-packages/issues/7529
     // TODO(#14031): Compress keys in public_keys_hash
     // https://github.com/AztecProtocol/aztec-packages/issues/14031
@@ -312,11 +314,11 @@ namespace address_derivation;
     sel {
         preaddress_public_key_x, preaddress_public_key_y, precomputed.zero,
         incoming_viewing_key_x, incoming_viewing_key_y, precomputed.zero,
-        address, address_y, precomputed.zero
+        address, address_y
     } in ecc.sel {
         ecc.p_x, ecc.p_y, ecc.p_is_inf,
         ecc.q_x, ecc.q_y, ecc.q_is_inf,
-        ecc.r_x, ecc.r_y, ecc.r_is_inf
+        ecc.r_x, ecc.r_y
     };
 
     // Note: We can safely assume the address point is not infinity since that would imply either
