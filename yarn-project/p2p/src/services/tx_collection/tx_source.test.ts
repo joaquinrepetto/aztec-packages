@@ -1,13 +1,16 @@
+import { createLogger } from '@aztec/foundation/log';
 import type { AztecNode } from '@aztec/stdlib/interfaces/client';
 import { Tx, type TxValidator } from '@aztec/stdlib/tx';
 
 import { type MockProxy, mock } from 'jest-mock-extended';
 
+import { SharedTxValidationCache } from './shared_tx_validation_cache.js';
 import { NodeRpcTxSource } from './tx_source.js';
 
 describe('NodeRpcTxSource', () => {
   let mockClient: MockProxy<Pick<AztecNode, 'getTxsByHash'>>;
   let mockValidator: MockProxy<TxValidator>;
+  let validationCache: SharedTxValidationCache;
 
   const makeTx = async () => {
     const tx = Tx.random();
@@ -19,9 +22,10 @@ describe('NodeRpcTxSource', () => {
     mockClient = mock<Pick<AztecNode, 'getTxsByHash'>>();
     mockValidator = mock<TxValidator>();
     mockValidator.validateTx.mockResolvedValue({ result: 'valid' });
+    validationCache = new SharedTxValidationCache(mockValidator, createLogger('test'));
   });
 
-  const createSource = () => new NodeRpcTxSource(mockClient, mockValidator, 'test');
+  const createSource = () => new NodeRpcTxSource(mockClient, validationCache, 'test');
 
   it('returns valid txs when validator accepts', async () => {
     const tx1 = await makeTx();
