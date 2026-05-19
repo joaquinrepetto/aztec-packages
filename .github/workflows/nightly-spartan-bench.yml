@@ -227,7 +227,10 @@ jobs:
           if [[ -n "${{ inputs.nightly_tag }}" ]]; then
             nightly_tag="${{ inputs.nightly_tag }}"
           else
-            current_version=$(cat VERSION)
+            # This job runs from merge-train/spartan, which may lag root VERSION
+            # migrations. The Docker image tag it consumes is the next nightly.
+            git fetch origin next:refs/remotes/origin/next --depth=1
+            current_version=$(git show origin/next:VERSION | tr -d '[:space:]')
             nightly_tag="${current_version}-nightly.$(date -u +%Y%m%d)"
           fi
           echo "nightly_tag=$nightly_tag" >> $GITHUB_OUTPUT

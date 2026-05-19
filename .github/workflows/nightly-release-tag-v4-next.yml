@@ -24,7 +24,23 @@ jobs:
         run: |
           git config --global user.email "tech@aztecprotocol.com"
           git config --global user.name "AztecBot"
-          current_version=$(cat VERSION)
+          if [[ -f VERSION ]]; then
+            current_version=$(tr -d '[:space:]' < VERSION)
+          else
+            # During the two-branch migration, next can contain this workflow
+            # before v4-next has switched from the old manifest to VERSION.
+            current_version=$(
+              git ls-remote --tags --refs origin 'v4.*-nightly.*' |
+                awk -F/ '{print $3}' |
+                sed -nE 's/^v([0-9]+\.[0-9]+\.[0-9]+)-nightly\..*$/\1/p' |
+                sort -V |
+                tail -n1
+            )
+            if [[ -z "$current_version" ]]; then
+              echo "Unable to infer current v4-next version from VERSION or nightly tags"
+              exit 1
+            fi
+          fi
           echo "Current version: $current_version"
           nightly_tag="v${current_version}-nightly.$(date -u +%Y%m%d)"
           echo "v4-next nightly tag: $nightly_tag"
