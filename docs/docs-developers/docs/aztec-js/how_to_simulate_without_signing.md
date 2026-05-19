@@ -16,27 +16,28 @@ You are probably here because of one of these:
 - The wallet prompts the user for a signature on every `.simulate()` call, including reads of view-style functions.
 - `.simulate()` fails with `Circuit execution failed: min_revertible_side_effect_counter must not be 0 for tail_to_public` when you pass `from: AztecAddress.ZERO` and no fee block.
 - A custom fee payment method breaks during simulation because `from` is `AztecAddress.ZERO`.
-- Simulations take long enough that you want to skip the kernel proving step.
+- Simulations take long enough that you want to skip the kernel circuits entirely.
 
 ## The wrong fix
 
-Do not use `from: AztecAddress.ZERO` as a workaround for the signing prompt. That value has a specific meaning in the Private eXecution Environment (PXE): it tells the wallet to execute the payload through the default entrypoint with no account contract mediation. Combined with no fee payment method, it skips the setup phase that ends with `end_setup()`, which is what produces the `min_revertible_side_effect_counter must not be 0` error.
+Do not pass `from: AztecAddress.ZERO`. That value was the old way to express "no account context," and it is no longer a supported input for `.simulate()`. The replacement is `NO_FROM` (from `@aztec/aztec.js/account`), which tells the wallet to execute the payload through the default entrypoint with no account contract mediation. `NO_FROM` is still only appropriate for calls that genuinely have no sender; use a real account address for everything else.
 
-Do not deploy a sham "no-op" fee payment contract just to satisfy the simulation. The PXE already supports the use case you want; it just needs to be told to use it.
+Do not deploy a sham "no-op" fee payment contract just to satisfy the simulation. The Private eXecution Environment (PXE) already supports the use case you want, and the wallet handles it for you.
 
 ## The right fix
 
-Run the simulation with a **stub account contract override**. The PXE swaps your account contract for one whose `is_valid` always returns true, so authwit validity checks pass without a signature. The wallet then collects any `CallAuthorizationRequest` offchain effects from the simulation and turns them into real authentication witnesses for the actual `.send()`.
+A simulation uses a **stub account contract override**: the wallet provides a `SimulationOverrides` payload whose `contracts` map swaps the caller's account contract for a stub whose `is_valid` always returns true, and the PXE applies that override during the kernelless simulation. With the stub in place, authwit validity checks pass without a signature, and the wallet collects any `CallAuthorizationRequest` offchain effects emitted during the run to turn them into real authentication witnesses for the eventual `.send()`.
 
-`EmbeddedWallet` installs the stub-account override automatically on every `.simulate()` call, so most dApps do not need to construct overrides themselves. The two ways to wire this up below correspond to "use the default" and "implement it in your own wallet."
+`EmbeddedWallet` installs this override automatically on every `.simulate()` call, so most dApps do not need to construct overrides themselves. The two ways to wire this up below correspond to "use the default" and "implement it in your own wallet."
 
 ### As a dApp caller
 
 For a normal `.simulate()` you do not need to pass overrides yourself. The default simulation path is already kernelless, and wallets such as `EmbeddedWallet` install the stub-account override internally for you. Three things to remember:
 
-- Pass a real account address as `from`, not `AztecAddress.ZERO`.
-- Omit the `fee` block; this is a simulation, not a real transaction.
-- If you have a stale call site that uses `from: AztecAddress.ZERO` plus a no-op fee payment method as a workaround, replace it with a real `from` and drop the fee block.
+- Pass a real account address as `from`, or `NO_FROM` if the call genuinely has no sender. Do not use `AztecAddress.ZERO`.
+- For simple reads, you can omit the `fee` block.
+- For a transaction whose real fee path uses a fee payment contract (FPC) with private side effects (the FPC emits notes during fee payment), include that FPC in the simulation's fee options so gas estimation accounts for the FPC's side effects. Kernelless still applies; the gas number stays accurate.
+- If you have a stale call site that uses `from: AztecAddress.ZERO` plus a no-op fee payment method as a workaround, replace it with a real `from` (or `NO_FROM`) and drop the no-op fee contract.
 
 #include_code simulate-view-without-signing /docs/examples/ts/aztecjs_kernelless_simulation/index.ts typescript
 
@@ -55,11 +56,11 @@ The override map itself has to be built by code that knows the contract class id
 
 ### As a wallet implementer
 
-`EmbeddedWallet` (`yarn-project/wallets/src/embedded/embedded_wallet.ts`) is the canonical in-tree implementation of the override pattern. The three pieces it wires up are:
+`EmbeddedWallet` (`yarn-project/wallets/src/embedded/embedded_wallet.ts`, in `@aztec/wallets`) is the canonical implementation of the override pattern and the reference any custom wallet should follow. The three pieces it wires up are:
 
 1. **Register the stub contract class with the PXE at wallet startup.** Inside `initStubClasses`, `EmbeddedWallet` calls `pxe.registerContractClass` for each supported account type's stub artifact and caches the resulting class id by account type.
 2. **Build an override map for every account in scope.** Inside `buildAccountOverrides`, it fetches the live contract instance for each scoped address and returns a `ContractOverrides` map that copies the instance with `currentContractClassId` rewritten to the stub class id. The map covers every account in scope, not only `from`.
-3. **Use the stub entrypoint and pass the override to `pxe.simulateTx`.** Inside the overridden `simulateViaEntrypoint`, it constructs the `TxExecutionRequest` through the stub account's `DefaultAccountEntrypoint` (so the request is signed by the stub's empty-signature provider) and calls `pxe.simulateTx` with the resulting `SimulationOverrides`. `TestWallet` (`yarn-project/end-to-end/src/test-wallet/test_wallet.ts`) implements the same three steps in a simpler form for end-to-end tests.
+3. **Use the stub entrypoint and pass the override to `pxe.simulateTx`.** Inside the overridden `simulateViaEntrypoint`, it constructs the `TxExecutionRequest` through the stub account's `DefaultAccountEntrypoint` (so the request is signed by the stub's empty-signature provider) and calls `pxe.simulateTx` with the resulting `SimulationOverrides`.
 
 The key constraints on this path:
 
@@ -89,11 +90,10 @@ The dApp does not need to know which calls require authwits ahead of time. The s
 
 ## Things to watch out for
 
-- **`AztecAddress.ZERO` is not "no sender".** Use a real account address with overrides instead. Reserve `AztecAddress.ZERO` (or `NO_FROM`) for calls that genuinely have no account context.
-- **Private fee payment contracts can skew gas estimates.** Kernelless simulation matches full simulation on gas in the common case, but a private fee payment contract (FPC) that holds notes is a known edge case. If you need exact gas for a tx that pays through a private FPC, run a full simulation as a sanity check.
+- **`AztecAddress.ZERO` is not "no sender".** Use `NO_FROM` (from `@aztec/aztec.js/account`) for calls that genuinely have no account context, and a real account address otherwise.
+- **A private FPC needs to be included in fee options for accurate gas.** Kernelless simulation matches full simulation on gas, but only if the simulation sees the same fee path as the real transaction. If the user will pay through a fee payment contract (FPC) that emits private notes, pass that FPC in the simulation's fee options so its side effects are accounted for. Kernelless plus a private FPC is the supported path; you do not need a full simulation to get accurate gas.
 - **`profile()` is not kernelless.** If you call `.profile()` to count circuit gates, the kernels run regardless. Use `.simulate()` if you only need return values, offchain effects, or gas estimates.
 - **Utility functions ignore overrides.** `FunctionType.UTILITY` calls go through a different code path and reject `SimulationOverrides`. They do not need an override anyway, since they do not run through an account contract.
-- **Wallet-wide simulation toggles can race.** If your wallet exposes a single mode flag (the way `TestWallet.setSimulationMode` does), concurrent `.simulate()` calls from different parts of the UI can see each other's state. Prefer per-call overrides via `SimulationOverrides` for production wallets.
 
 ## Related
 

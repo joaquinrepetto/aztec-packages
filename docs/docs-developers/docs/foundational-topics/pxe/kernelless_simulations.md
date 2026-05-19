@@ -31,7 +31,8 @@ What it skips with `skipKernels: true`:
 
 - the private kernel init, inner, reset, and tail circuits
 - the proof generation associated with those kernels
-- the kernel-level authwit validity check (the account contract's `is_valid` is still invoked, but its result is not checked by a kernel)
+
+The kernels themselves do not check authentication witnesses. Authwit validity is checked by user-contract code (the `is_valid` call that the `#[authorize_once]` macro injects into the called function). What lets a kernelless simulation skip the signing prompt is the **stub-account override**, not the absence of the kernels: replacing the caller's account contract with a stub whose `is_valid` always returns true lets that user-contract check pass without a signature.
 
 ## Simulation overrides
 
@@ -84,22 +85,17 @@ The default applies to `simulateTx`, but not to every entry point that looks lik
 
 The end-to-end test `yarn-project/end-to-end/src/e2e_kernelless_simulation.test.ts` asserts that kernelless and full simulations produce identical `gasLimits.l2Gas` and `gasLimits.daGas` for four representative scenarios: an AMM `swap_exact_tokens_for_tokens` call with authwits, a `PendingNoteHashes` call with note squashing in nested calls, a Schnorr account deployment, and an ECDSA account deployment. The AMM scenario additionally asserts identical `feePayer` between the two modes.
 
-One caveat: a private fee payment contract (FPC) that holds notes can skew gas measurements between kernelless and full simulation. Treat the kernelless number as the source of truth in normal cases, and run a full simulation if you specifically need to debug a private-FPC gas discrepancy.
+If the real transaction will pay through a fee payment contract (FPC) with private side effects (the FPC emits notes during fee payment), include that FPC in the simulation's fee options. The FPC's side effects feed into gas estimation, and you can run kernelless with the FPC attached to get both the speed benefit and accurate gas numbers. The default of "omit the fee block" only produces accurate gas for transactions whose fee path has no private side effects.
 
 ## Multi-account scopes
 
 A simulation can run with multiple scoped accounts via `additionalScopes`. If you build a stub-account override for the sender only, the simulation will still prompt for authwits from any other in-scope account it touches. The override map must cover every account in scope, not just `from`.
 
-The in-tree implementations (`EmbeddedWallet.buildAccountOverrides` in `yarn-project/wallets/src/embedded/embedded_wallet.ts` and `TestWallet.buildAccountOverrides` in `yarn-project/end-to-end/src/test-wallet/test_wallet.ts`) both follow the same shape: for each scoped address, fetch the live contract instance from the PXE, copy it, and rewrite `currentContractClassId` to point at the stub class id registered at wallet startup. When implementing overrides in your own wallet, follow this pattern and make sure the scope list you build against matches the one the simulation will run with.
+The canonical implementation is `EmbeddedWallet.buildAccountOverrides` in `yarn-project/wallets/src/embedded/embedded_wallet.ts`: for each scoped address, fetch the live contract instance from the PXE, copy it, and rewrite `currentContractClassId` to point at the stub class id registered at wallet startup. When implementing overrides in your own wallet, follow this pattern and make sure the scope list you build against matches the one the simulation will run with.
 
 ## When you might still want a full simulation
 
-Kernelless is the right default. Reach for `skipKernels: false` only when:
-
-- you are validating kernel-level behavior itself (rare, mostly internal)
-- you suspect a private-FPC-specific gas divergence and want a second number to compare against
-
-In both cases you accept the full kernel cost as the price of confidence.
+Kernelless is the right default. Reach for `skipKernels: false` only when you are validating kernel-level behavior itself, which is rare and mostly internal. For everything else, including accurate gas estimation through a fee payment contract with private side effects, run kernelless with the appropriate fee options.
 
 ## Related
 
