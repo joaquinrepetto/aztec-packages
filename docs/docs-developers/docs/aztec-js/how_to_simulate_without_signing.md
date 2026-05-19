@@ -14,7 +14,12 @@ For the conceptual model of what kernelless simulation is, see [Kernelless simul
 You are probably here because of one of these:
 
 - The wallet prompts the user for a signature on every `.simulate()` call, including reads of view-style functions.
-- `.simulate()` fails with `Circuit execution failed: min_revertible_side_effect_counter must not be 0 for tail_to_public` when you pass `from: AztecAddress.ZERO` and no fee block.
+- `.simulate()` fails with one of:
+  - `Account "0x0000…0000" does not exist on this wallet.` (from `EmbeddedWallet`)
+  - `Account not found in wallet for address: 0x0000…0000` (from other wallets built on `BaseWallet`)
+  - `Circuit execution failed: min_revertible_side_effect_counter must not be 0 for tail_to_public` (from a custom wallet that does not intercept the zero address, where the call reaches the kernel)
+
+  All three are the same root cause: passing `from: AztecAddress.ZERO`.
 - A custom fee payment method breaks during simulation because `from` is `AztecAddress.ZERO`.
 - Simulations take long enough that you want to skip the kernel circuits entirely.
 
@@ -93,7 +98,7 @@ The dApp does not need to know which calls require authwits ahead of time. The s
 - **`AztecAddress.ZERO` is not "no sender".** Use `NO_FROM` (from `@aztec/aztec.js/account`) for calls that genuinely have no account context, and a real account address otherwise.
 - **A private FPC needs to be included in fee options for accurate gas.** Kernelless simulation matches full simulation on gas, but only if the simulation sees the same fee path as the real transaction. If the user will pay through a fee payment contract (FPC) that emits private notes, pass that FPC in the simulation's fee options so its side effects are accounted for. Kernelless plus a private FPC is the supported path; you do not need a full simulation to get accurate gas.
 - **`profile()` is not kernelless.** If you call `.profile()` to count circuit gates, the kernels run regardless. Use `.simulate()` if you only need return values, offchain effects, or gas estimates.
-- **Utility functions ignore overrides.** `FunctionType.UTILITY` calls go through a different code path and reject `SimulationOverrides`. They do not need an override anyway, since they do not run through an account contract.
+- **Utility functions reject overrides.** `FunctionType.UTILITY` calls go through `wallet.executeUtility`, and `ContractFunctionInteraction.simulate` throws `overrides are not supported for utility function simulation` if you pass non-empty `overrides.publicStorage` or `overrides.contracts`. Utility functions do not need an override anyway, since they do not run through an account contract.
 
 ## Related
 
