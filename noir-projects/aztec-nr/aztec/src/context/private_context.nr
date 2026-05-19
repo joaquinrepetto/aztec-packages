@@ -42,9 +42,10 @@ use crate::protocol::{
     hash::compute_contract_class_log_hash,
     messaging::l2_to_l1_message::L2ToL1Message,
     side_effect::{Counted, scoped::Scoped},
-    traits::{Empty, Hash, ToField},
+    traits::{Empty, ToField},
     utils::arrays::{ClaimedLengthArray, trimmed_array_length_hint},
 };
+use std::embedded_curve_ops::EmbeddedCurvePoint;
 
 /// # PrivateContext
 ///
@@ -768,10 +769,13 @@ impl PrivateContext {
     /// emitted to the kernel.
     ///
     fn request_sk_app(&mut self, pk_m_hash: Field, key_index: Field) -> Field {
+        // TODO(MW): Temp - this will be overwritten by upstream public key hashing changes anyway
+        let temp_hash_with_inf: fn(EmbeddedCurvePoint) -> Field =
+            |p: EmbeddedCurvePoint| protocol_types::hash::poseidon2_hash([p.x, p.y, p.is_infinite() as Field]);
         let cached_request =
             self.last_key_validation_requests[key_index as u32].unwrap_or(KeyValidationRequest::empty());
 
-        if cached_request.pk_m.hash() == pk_m_hash {
+        if temp_hash_with_inf(cached_request.pk_m) == pk_m_hash {
             // We get a match so the cached request is the latest one
             cached_request.sk_app
         } else {
@@ -784,8 +788,8 @@ impl PrivateContext {
             // Safety: Kernels verify that the key validation request is valid and below we verify that a request for
             // the correct public key has been received.
             let request = unsafe { get_key_validation_request(pk_m_hash, key_index) };
-            assert(!request.pk_m.is_infinite, "Infinite public key points are not allowed");
-            assert_eq(request.pk_m.hash(), pk_m_hash, "Obtained invalid key validation request");
+            assert(!request.pk_m.is_infinite(), "Infinite public key points are not allowed");
+            assert_eq(temp_hash_with_inf(request.pk_m), pk_m_hash, "Obtained invalid key validation request");
 
             self.key_validation_requests_and_separators.push(
                 KeyValidationRequestAndSeparator {

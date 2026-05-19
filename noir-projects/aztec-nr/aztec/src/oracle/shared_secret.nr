@@ -1,10 +1,10 @@
 use crate::protocol::address::aztec_address::AztecAddress;
-use crate::protocol::point::Point;
+use std::embedded_curve_ops::EmbeddedCurvePoint;
 
 #[oracle(aztec_utl_getSharedSecret)]
 unconstrained fn get_shared_secret_oracle(
     address: AztecAddress,
-    ephPk: Point,
+    ephPk: EmbeddedCurvePoint,
     contract_address: AztecAddress,
 ) -> Field {}
 
@@ -27,6 +27,10 @@ unconstrained fn get_shared_secret_oracle(
 ///
 /// Callers derive indexed subkeys from `s_app` via
 /// [`derive_shared_secret_subkey`](crate::keys::ecdh_shared_secret::derive_shared_secret_subkey).
-pub unconstrained fn get_shared_secret(address: AztecAddress, ephPk: Point, contract_address: AztecAddress) -> Field {
+pub unconstrained fn get_shared_secret(
+    address: AztecAddress,
+    ephPk: EmbeddedCurvePoint,
+    contract_address: AztecAddress,
+) -> Field {
     get_shared_secret_oracle(address, ephPk, contract_address)
 }

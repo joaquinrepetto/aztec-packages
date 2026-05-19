@@ -5,7 +5,7 @@ use crate::{context::PrivateContext, oracle::get_contract_instance::get_contract
 use crate::protocol::{
     abis::function_selector::FunctionSelector,
     address::AztecAddress,
-    constants::CONTRACT_INSTANCE_REGISTRY_CONTRACT_ADDRESS,
+    constants::{CONTRACT_INSTANCE_LENGTH, CONTRACT_INSTANCE_REGISTRY_CONTRACT_ADDRESS},
     traits::{Serialize, ToField},
 };
 
@@ -25,18 +25,18 @@ pub fn publish_contract_instance_for_public_execution(context: &mut PrivateConte
     // ../../yarn-project/node_modules/.bin/aztec-cli codegen
     // target/contract_instance_registry_contract-ContractInstanceRegistry.json --nr -o
     // ./contracts/contract_instance_registry_contract/src/interface
-    let mut serialized_args = [0; 16];
+    let mut serialized_args = [0; CONTRACT_INSTANCE_LENGTH];
     serialized_args[0] = instance.salt;
     serialized_args[1] = instance.contract_class_id.to_field();
     serialized_args[2] = instance.initialization_hash;
 
     let serialized_public_keys = instance.public_keys.serialize();
 
-    for i in 0..12 {
+    for i in 0..8 {
         serialized_args[i + 3] = serialized_public_keys[i];
     }
 
-    serialized_args[15] = universal_deploy as Field;
+    serialized_args[11] = universal_deploy as Field;
 
     let _call_result = context.call_private_function(
         CONTRACT_INSTANCE_REGISTRY_CONTRACT_ADDRESS,

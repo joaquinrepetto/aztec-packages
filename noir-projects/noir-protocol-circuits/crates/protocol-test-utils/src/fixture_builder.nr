@@ -5,6 +5,7 @@ use crate::fixtures::{
     public_data_tree::empty_public_data_tree,
     vk_tree::{get_vk_data, vk_tree_root},
 };
+use std::embedded_curve_ops::EmbeddedCurvePoint;
 use types::{
     abis::{
         accumulated_data::{
@@ -80,7 +81,6 @@ use types::{
     },
     merkle_tree::membership::MembershipWitness,
     messaging::l2_to_l1_message::L2ToL1Message,
-    point::Point,
     proof::{verification_key::{MegaVerificationKey, VerificationKey}, vk_data::VkData},
     public_keys::PublicKeys,
     side_effect::{Counted, Ordered, Scoped},
@@ -965,7 +965,7 @@ impl FixtureBuilder {
 
     pub fn add_request_for_key_validation(
         &mut self,
-        pk_m: Point,
+        pk_m: EmbeddedCurvePoint,
         sk_app: Field,
         key_type_domain_separator: Field,
     ) {
@@ -1259,7 +1259,7 @@ impl FixtureBuilder {
     fn mock_key_validation_request(self, index: u32) -> KeyValidationRequestAndSeparator {
         let value_offset = 3030 + self.value_offset + index as Field;
         let request = KeyValidationRequest {
-            pk_m: Point { x: value_offset, y: 1 + value_offset, is_infinite: false },
+            pk_m: EmbeddedCurvePoint { x: value_offset, y: 1 + value_offset },
             sk_app: 2 + value_offset,
         };
         KeyValidationRequestAndSeparator { request, key_type_domain_separator: 3 + value_offset }

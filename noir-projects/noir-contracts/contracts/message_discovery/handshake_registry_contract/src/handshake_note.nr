@@ -4,10 +4,10 @@ use aztec::{
         address::AztecAddress,
         constants::DOM_SEP__HANDSHAKE_SECRET_HASH,
         hash::poseidon2_hash_with_separator,
-        point::Point,
         traits::{Deserialize, Packable, Serialize},
     },
 };
+use std::embedded_curve_ops::EmbeddedCurvePoint;
 
 /// A record of a handshake established by the note's owner (the sender).
 ///
@@ -30,7 +30,7 @@ pub struct HandshakeNote {
 }
 
 impl HandshakeNote {
-    pub fn new(shared_secret: Point, handshake_type: u8, recipient: AztecAddress) -> Self {
+    pub fn new(shared_secret: EmbeddedCurvePoint, handshake_type: u8, recipient: AztecAddress) -> Self {
         Self {
             secret_hash: poseidon2_hash_with_separator(
                 [shared_secret.x, shared_secret.y],

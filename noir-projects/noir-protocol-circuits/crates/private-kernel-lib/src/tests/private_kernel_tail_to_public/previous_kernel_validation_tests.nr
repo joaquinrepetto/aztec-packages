@@ -5,7 +5,6 @@ use types::{
         CONTRACT_CLASS_LOG_SIZE_IN_FIELDS, DOM_SEP__TSK_M, PRIVATE_KERNEL_TAIL_VK_INDEX,
         PRIVATE_LOG_SIZE_IN_FIELDS,
     },
-    point::Point,
     side_effect::Scoped,
     traits::{Empty, FromField},
 };
@@ -41,7 +40,7 @@ fn non_empty_nullifier_read_requests() {
 fn non_empty_key_validations() {
     let mut builder = TestBuilder::new();
     builder.previous_kernel.add_request_for_key_validation(
-        Point { x: 1, y: 2, is_infinite: false },
+        std::embedded_curve_ops::EmbeddedCurvePoint { x: 1, y: 2 },
         27,
         DOM_SEP__TSK_M as Field,
     );
