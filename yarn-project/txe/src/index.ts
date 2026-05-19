@@ -266,7 +266,7 @@ class TXEDispatcher {
 
 const TXEDispatcherApiSchema: ApiSchemaFor<TXEDispatcher> = {
   // eslint-disable-next-line camelcase
-  resolve_foreign_call: z.function().args(TXEForeignCallInputSchema).returns(ForeignCallResultSchema),
+  resolve_foreign_call: z.function({ input: z.tuple([TXEForeignCallInputSchema]), output: ForeignCallResultSchema }),
 };
 
 /**
