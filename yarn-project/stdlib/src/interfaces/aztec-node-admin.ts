@@ -48,6 +48,15 @@ export interface AztecNodeAdmin {
   /** Resumes archiver and world state syncing. */
   resumeSync(): Promise<void>;
 
+  /**
+   * Pauses block production. Pending txs remain in the mempool; no new blocks will be
+   * produced until {@link resumeSequencer} is called. Throws if no sequencer is running.
+   */
+  pauseSequencer(): Promise<void>;
+
+  /** Resumes block production previously paused via {@link pauseSequencer}. */
+  resumeSequencer(): Promise<void>;
+
   /** Returns all offenses applicable for the given round. */
   getSlashOffenses(round: bigint | 'all' | 'current'): Promise<Offense[]>;
 
@@ -105,6 +114,8 @@ export const AztecNodeAdminApiSchema: ApiSchemaFor<AztecNodeAdmin> = {
   rollbackTo: z.function().args(z.number(), optional(z.boolean()), optional(z.boolean())).returns(z.void()),
   pauseSync: z.function().returns(z.void()),
   resumeSync: z.function().returns(z.void()),
+  pauseSequencer: z.function().returns(z.void()),
+  resumeSequencer: z.function().returns(z.void()),
   getSlashOffenses: z
     .function()
     .args(z.union([z.bigint(), z.literal('all'), z.literal('current')]))
