@@ -45,7 +45,22 @@ jobs:
             TAG="${{ inputs.tag }}"
             echo "Using manually specified tag: $TAG"
           else
-            current_version=$(cat VERSION)
+            if [[ -f VERSION ]]; then
+              current_version=$(tr -d '[:space:]' < VERSION)
+            else
+              # During the two-branch migration, next can run this workflow
+              # before v4-next has switched from the old manifest to VERSION.
+              current_version=$(
+                git tag -l 'v4.*-nightly.*' |
+                  sed -nE 's/^v([0-9]+\.[0-9]+\.[0-9]+)-nightly\..*$/\1/p' |
+                  sort -V |
+                  tail -n1
+              )
+              if [[ -z "$current_version" ]]; then
+                echo "Unable to infer current v4-next version from VERSION or nightly tags"
+                exit 1
+              fi
+            fi
             TAG="v${current_version}-nightly.$(date -u +%Y%m%d)"
             echo "Nightly tag: $TAG"
           fi

@@ -11,6 +11,19 @@ This changelog documents all configuration changes, new features, and breaking c
 
 ## Version history
 
+### [v5.x](./v5.md)
+
+Operator-facing changes for the v5.x release line.
+
+**Key changes:**
+- TBD
+
+**Migration difficulty**: TBD
+
+[View full changelog →](./v5.md)
+
+---
+
 ### [v4.2.0](./v4.2.md)
 
 New features and configuration options for node operators.
