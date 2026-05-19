@@ -20,6 +20,10 @@ function build {
   echo
 
   # Create Verdaccio config.
+  # @aztec/* and @noir-lang/* are our own first-party packages, published only
+  # locally during this build. Do NOT proxy them to npmjs: verdaccio queries the
+  # uplink during publish to check for conflicts, and when npmjs returns 5xx it
+  # refuses the publish (E503 "one of the uplinks is down, refuse to publish").
   cat > /tmp/verdaccio-config.yaml <<EOF
 storage: $PWD/verdaccio-storage
 max_body_size: 1000mb
@@ -29,6 +33,16 @@ uplinks:
     url: https://registry.npmjs.org/
 
 packages:
+  "@aztec/*":
+    access: \$all
+    publish: \$all
+    unpublish: \$all
+
+  "@noir-lang/*":
+    access: \$all
+    publish: \$all
+    unpublish: \$all
+
   "@*/*":
     access: \$all
     publish: \$all
