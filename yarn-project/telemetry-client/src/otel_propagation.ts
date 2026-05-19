@@ -1,50 +1,75 @@
-import { ROOT_CONTEXT, type Span, SpanKind, SpanStatusCode, propagation } from '@opentelemetry/api';
+import type { DiagnosticsHandler } from '@aztec/foundation/json-rpc/server';
+
+import { ROOT_CONTEXT, type Span, SpanKind, propagation } from '@opentelemetry/api';
 import type Koa from 'koa';
 
-import { getTelemetryClient } from './start.js';
 import {
-  ATTR_JSONRPC_ERROR_CODE,
-  ATTR_JSONRPC_ERROR_MSG,
-  ATTR_JSONRPC_METHOD,
-  ATTR_JSONRPC_REQUEST_ID,
-} from './vendor/attributes.js';
+  applyJsonRpcExceptionSpanStatus,
+  applyJsonRpcResponseSpanStatus,
+  getJsonRpcRequestSpanMetadata,
+} from './json_rpc_tracing.js';
+import { getTelemetryClient } from './start.js';
+import type { TelemetryClient } from './telemetry.js';
+
+type GetTelemetryClient = () => Pick<TelemetryClient, 'getTracer'>;
 
 export function getOtelJsonRpcPropagationMiddleware(
   scope = 'JsonRpcServer',
+  getClient: GetTelemetryClient = getTelemetryClient,
 ): (ctx: Koa.Context, next: () => Promise<void>) => Promise<void> {
   return function otelJsonRpcPropagation(ctx: Koa.Context, next: () => Promise<void>) {
-    const tracer = getTelemetryClient().getTracer(scope);
-    const context = propagation.extract(ROOT_CONTEXT, ctx.request.headers);
-    const method = (ctx.request.body as any)?.method;
+    const tracer = getClient().getTracer(scope);
+    const extractedContext = propagation.extract(ROOT_CONTEXT, ctx.request.headers);
     return tracer.startActiveSpan(
-      `JsonRpcServer.${method ?? 'unknown'}`,
-      { kind: SpanKind.SERVER },
-      context,
+      'JsonRpcServer',
+      { kind: SpanKind.SERVER, attributes: getJsonRpcRequestSpanMetadata('JsonRpcServer', undefined).attributes },
+      extractedContext,
       async (span: Span): Promise<void> => {
-        if (ctx.id) {
-          span.setAttribute(ATTR_JSONRPC_REQUEST_ID, ctx.id);
-        }
-        if (method) {
-          span.setAttribute(ATTR_JSONRPC_METHOD, method);
-        }
-
         try {
           await next();
-          const err = (ctx.body as any).error?.message;
-          const code = (ctx.body as any).error?.code;
-          if (err) {
-            span.setStatus({ code: SpanStatusCode.ERROR, message: err });
-            span.setAttribute(ATTR_JSONRPC_ERROR_CODE, code);
-            span.setAttribute(ATTR_JSONRPC_ERROR_MSG, err);
-          } else {
-            span.setStatus({ code: SpanStatusCode.OK });
-          }
+          applyJsonRpcRequestSpanMetadata(span, 'JsonRpcServer', ctx.request.body);
+          applyJsonRpcResponseSpanStatus(span, ctx.body);
         } catch (err) {
-          span.setStatus({ code: SpanStatusCode.ERROR, message: String(err) });
+          applyJsonRpcRequestSpanMetadata(span, 'JsonRpcServer', ctx.request.body);
+          applyJsonRpcExceptionSpanStatus(span, err);
+          throw err;
         } finally {
           span.end();
         }
       },
     );
   };
+}
+
+export function getOtelJsonRpcDiagnosticsHandler(
+  scope = 'JsonRpcServer',
+  getClient: GetTelemetryClient = getTelemetryClient,
+  delegate?: DiagnosticsHandler,
+): DiagnosticsHandler {
+  return function otelJsonRpcDiagnostics(ctx, processRequest) {
+    const tracer = getClient().getTracer(scope);
+    const metadata = getJsonRpcRequestSpanMetadata('JsonRpcHandler', { id: ctx.id, method: ctx.method });
+    return tracer.startActiveSpan(
+      metadata.name,
+      { kind: SpanKind.INTERNAL, attributes: metadata.attributes },
+      async (span: Span): Promise<unknown> => {
+        try {
+          const response = await (delegate ? delegate(ctx, processRequest) : processRequest());
+          applyJsonRpcResponseSpanStatus(span, response);
+          return response;
+        } catch (err) {
+          applyJsonRpcExceptionSpanStatus(span, err);
+          throw err;
+        } finally {
+          span.end();
+        }
+      },
+    );
+  };
+}
+
+function applyJsonRpcRequestSpanMetadata(span: Span, spanPrefix: string, requestOrBatch: unknown): void {
+  const metadata = getJsonRpcRequestSpanMetadata(spanPrefix, requestOrBatch);
+  span.updateName(metadata.name);
+  span.setAttributes(metadata.attributes);
 }

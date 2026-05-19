@@ -1,7 +1,8 @@
 import { type SafeJsonRpcServerOptions, createSafeJsonRpcServer } from '@aztec/foundation/json-rpc/server';
 import type { ApiSchemaFor } from '@aztec/stdlib/schemas';
 
-import { getOtelJsonRpcPropagationMiddleware } from '../otel_propagation.js';
+import { getOtelJsonRpcDiagnosticsHandler, getOtelJsonRpcPropagationMiddleware } from '../otel_propagation.js';
+import { getTelemetryClient } from '../start.js';
 
 export function createTracedJsonRpcServer<T extends object = any>(
   handler: T,
@@ -10,6 +11,11 @@ export function createTracedJsonRpcServer<T extends object = any>(
 ) {
   return createSafeJsonRpcServer(handler, schema, {
     ...options,
+    diagnosticsHandler: getOtelJsonRpcDiagnosticsHandler(
+      'JsonRpcServer',
+      getTelemetryClient,
+      options.diagnosticsHandler,
+    ),
     middlewares: [...(options.middlewares ?? []), getOtelJsonRpcPropagationMiddleware()],
   });
 }

@@ -10,7 +10,7 @@ import type { ChainConfig } from '@aztec/stdlib/config';
 import { AztecNodeAdminApiSchema, AztecNodeApiSchema, AztecNodeDebugApiSchema } from '@aztec/stdlib/interfaces/client';
 import { getPackageVersion } from '@aztec/stdlib/update-checker';
 import { getVersioningMiddleware } from '@aztec/stdlib/versioning';
-import { getOtelJsonRpcPropagationMiddleware } from '@aztec/telemetry-client';
+import { getOtelJsonRpcDiagnosticsHandler, getOtelJsonRpcPropagationMiddleware } from '@aztec/telemetry-client';
 
 import { createLocalNetwork } from '../local-network/index.js';
 import { github, splash } from '../splash.js';
@@ -96,6 +96,7 @@ export async function aztecStart(options: any, userLog: LogFn, debugLogger: Logg
   if (Object.entries(services).length > 0) {
     const rpcServer = createNamespacedSafeJsonRpcServer(services, {
       http200OnError: false,
+      diagnosticsHandler: getOtelJsonRpcDiagnosticsHandler(),
       log: debugLogger,
       middlewares: [getOtelJsonRpcPropagationMiddleware(), getVersioningMiddleware(versions, versioningOpts)],
       maxBatchSize: options.rpcMaxBatchSize,
@@ -127,6 +128,7 @@ export async function aztecStart(options: any, userLog: LogFn, debugLogger: Logg
 
     const rpcServer = createNamespacedSafeJsonRpcServer(adminServices, {
       http200OnError: false,
+      diagnosticsHandler: getOtelJsonRpcDiagnosticsHandler(),
       log: debugLogger,
       middlewares: adminMiddlewares,
       maxBatchSize: options.rpcMaxBatchSize,
