@@ -509,7 +509,7 @@ function release_bb_github {
 
 function release {
   # Releases are triggered when REF_NAME is a valid semver (but can have a leading v).
-  # We ensure there is a github release for our REF_NAME, if not on latest (in which case release-please creates it).
+  # We ensure there is a github release for our REF_NAME.
   # We derive a dist tag from our prerelease portion of our REF_NAME semver. It is latest if no prerelease.
   echo_header "release all"
   set -x
@@ -937,7 +937,7 @@ case "$cmd" in
     compat_min_version="4.2.0"
 
     # Get current major version.
-    current_version=$(jq -r '."."' .release-please-manifest.json)
+    current_version=$(cat VERSION)
     major=$(semver major "$current_version")
     if [ "$major" != "$compat_major" ]; then
       echo "Compat e2e tests only apply to v${compat_major}. Current major: v${major}. Skipping."
