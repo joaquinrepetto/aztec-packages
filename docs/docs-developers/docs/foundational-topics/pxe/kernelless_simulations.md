@@ -88,11 +88,9 @@ One caveat: a private fee payment contract (FPC) that holds notes can skew gas m
 
 ## Multi-account scopes
 
-A simulation can run with multiple scoped accounts via `additionalScopes`. If you build a stub-account override for the sender only, the simulation will still prompt for authwits from any other in-scope account it touches. The canonical override builder, `TestWallet.buildAccountOverrides`, replaces the contract class id for **every** scoped account, not just `from`:
+A simulation can run with multiple scoped accounts via `additionalScopes`. If you build a stub-account override for the sender only, the simulation will still prompt for authwits from any other in-scope account it touches. The override map must cover every account in scope, not just `from`.
 
-#include_code build-account-overrides /yarn-project/end-to-end/src/test-wallet/test_wallet.ts typescript
-
-Copy this pattern when implementing overrides in your own wallet, and make sure the scope list you pass in is the one you intend to simulate against.
+The in-tree implementations (`EmbeddedWallet.buildAccountOverrides` in `yarn-project/wallets/src/embedded/embedded_wallet.ts` and `TestWallet.buildAccountOverrides` in `yarn-project/end-to-end/src/test-wallet/test_wallet.ts`) both follow the same shape: for each scoped address, fetch the live contract instance from the PXE, copy it, and rewrite `currentContractClassId` to point at the stub class id registered at wallet startup. When implementing overrides in your own wallet, follow this pattern and make sure the scope list you build against matches the one the simulation will run with.
 
 ## When you might still want a full simulation
 
