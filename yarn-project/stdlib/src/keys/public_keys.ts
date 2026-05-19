@@ -11,7 +11,6 @@ import {
 } from '@aztec/constants';
 import { poseidon2HashWithSeparator } from '@aztec/foundation/crypto/poseidon';
 import { Fr } from '@aztec/foundation/curves/bn254';
-import { Point } from '@aztec/foundation/curves/grumpkin';
 import { schemas } from '@aztec/foundation/schemas';
 import { BufferReader, FieldReader, serializeToBuffer } from '@aztec/foundation/serialize';
 import { bufferToHex, withoutHexPrefix } from '@aztec/foundation/string';
@@ -19,7 +18,7 @@ import type { FieldsOf } from '@aztec/foundation/types';
 
 import { z } from 'zod';
 
-import type { PublicKey } from './public_key.js';
+import { PublicKey } from './public_key.js';
 
 export class PublicKeys {
   public constructor(
@@ -65,10 +64,10 @@ export class PublicKeys {
       return obj;
     }
     return new PublicKeys(
-      Point.fromPlainObject(obj.masterNullifierPublicKey),
-      Point.fromPlainObject(obj.masterIncomingViewingPublicKey),
-      Point.fromPlainObject(obj.masterOutgoingViewingPublicKey),
-      Point.fromPlainObject(obj.masterTaggingPublicKey),
+      PublicKey.fromPlainObject(obj.masterNullifierPublicKey),
+      PublicKey.fromPlainObject(obj.masterIncomingViewingPublicKey),
+      PublicKey.fromPlainObject(obj.masterOutgoingViewingPublicKey),
+      PublicKey.fromPlainObject(obj.masterTaggingPublicKey),
     );
   }
 
@@ -77,10 +76,10 @@ export class PublicKeys {
       ? Fr.ZERO
       : poseidon2HashWithSeparator(
           [
-            this.masterNullifierPublicKey,
-            this.masterIncomingViewingPublicKey,
-            this.masterOutgoingViewingPublicKey,
-            this.masterTaggingPublicKey,
+            this.masterNullifierPublicKey.tempToFieldsWithInf(),
+            this.masterIncomingViewingPublicKey.tempToFieldsWithInf(),
+            this.masterOutgoingViewingPublicKey.tempToFieldsWithInf(),
+            this.masterTaggingPublicKey.tempToFieldsWithInf(),
           ],
           DomainSeparator.PUBLIC_KEYS_HASH,
         );
@@ -97,15 +96,20 @@ export class PublicKeys {
 
   static default(): PublicKeys {
     return new PublicKeys(
-      new Point(new Fr(DEFAULT_NPK_M_X), new Fr(DEFAULT_NPK_M_Y), false),
-      new Point(new Fr(DEFAULT_IVPK_M_X), new Fr(DEFAULT_IVPK_M_Y), false),
-      new Point(new Fr(DEFAULT_OVPK_M_X), new Fr(DEFAULT_OVPK_M_Y), false),
-      new Point(new Fr(DEFAULT_TPK_M_X), new Fr(DEFAULT_TPK_M_Y), false),
+      new PublicKey(new Fr(DEFAULT_NPK_M_X), new Fr(DEFAULT_NPK_M_Y), false),
+      new PublicKey(new Fr(DEFAULT_IVPK_M_X), new Fr(DEFAULT_IVPK_M_Y), false),
+      new PublicKey(new Fr(DEFAULT_OVPK_M_X), new Fr(DEFAULT_OVPK_M_Y), false),
+      new PublicKey(new Fr(DEFAULT_TPK_M_X), new Fr(DEFAULT_TPK_M_Y), false),
     );
   }
 
   static async random(): Promise<PublicKeys> {
-    return new PublicKeys(await Point.random(), await Point.random(), await Point.random(), await Point.random());
+    return new PublicKeys(
+      await PublicKey.random(),
+      await PublicKey.random(),
+      await PublicKey.random(),
+      await PublicKey.random(),
+    );
   }
 
   /**
@@ -127,6 +131,7 @@ export class PublicKeys {
   /**
    * Converts the PublicKeys instance into a Buffer.
    * This method should be used when encoding the address for storage, transmission or serialization purposes.
+   * TODO(MW): Double check this with new Point 2 elt class after upstream changes finalised
    *
    * @returns A Buffer representation of the PublicKeys instance.
    */
@@ -149,10 +154,10 @@ export class PublicKeys {
    */
   static fromBuffer(buffer: Buffer | BufferReader): PublicKeys {
     const reader = BufferReader.asReader(buffer);
-    const masterNullifierPublicKey = reader.readObject(Point);
-    const masterIncomingViewingPublicKey = reader.readObject(Point);
-    const masterOutgoingViewingPublicKey = reader.readObject(Point);
-    const masterTaggingPublicKey = reader.readObject(Point);
+    const masterNullifierPublicKey = reader.readObject(PublicKey);
+    const masterIncomingViewingPublicKey = reader.readObject(PublicKey);
+    const masterOutgoingViewingPublicKey = reader.readObject(PublicKey);
+    const masterTaggingPublicKey = reader.readObject(PublicKey);
     return new PublicKeys(
       masterNullifierPublicKey,
       masterIncomingViewingPublicKey,
@@ -197,10 +202,10 @@ export class PublicKeys {
   static fromFields(fields: Fr[] | FieldReader): PublicKeys {
     const reader = FieldReader.asReader(fields);
     return new PublicKeys(
-      reader.readObject(Point),
-      reader.readObject(Point),
-      reader.readObject(Point),
-      reader.readObject(Point),
+      reader.readObject(PublicKey),
+      reader.readObject(PublicKey),
+      reader.readObject(PublicKey),
+      reader.readObject(PublicKey),
     );
   }
 

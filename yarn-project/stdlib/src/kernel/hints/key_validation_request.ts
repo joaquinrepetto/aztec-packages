@@ -1,7 +1,9 @@
 import { KEY_VALIDATION_REQUEST_LENGTH } from '@aztec/constants';
 import { Fr } from '@aztec/foundation/curves/bn254';
-import { GrumpkinScalar, Point } from '@aztec/foundation/curves/grumpkin';
+import { GrumpkinScalar } from '@aztec/foundation/curves/grumpkin';
 import { BufferReader, FieldReader, serializeToBuffer } from '@aztec/foundation/serialize';
+
+import { PublicKey } from '../../keys/public_key.js';
 
 /**
  * Request for validating keys used in the app.
@@ -12,7 +14,7 @@ export class KeyValidationRequest {
 
   constructor(
     /** Master public key corresponding to the same underlying secret as app secret key below. */
-    public readonly pkM: Point,
+    public readonly pkM: PublicKey,
     skApp: Fr | GrumpkinScalar,
   ) {
     // I am doing this conversion here because in some places skApp is represented as GrumpkinScalar (Fq).
@@ -32,7 +34,7 @@ export class KeyValidationRequest {
 
   static fromBuffer(buffer: Buffer | BufferReader) {
     const reader = BufferReader.asReader(buffer);
-    return new KeyValidationRequest(Point.fromBuffer(reader), Fr.fromBuffer(reader));
+    return new KeyValidationRequest(PublicKey.fromBuffer(reader), Fr.fromBuffer(reader));
   }
 
   toFields(): Fr[] {
@@ -47,7 +49,7 @@ export class KeyValidationRequest {
 
   static fromFields(fields: Fr[] | FieldReader): KeyValidationRequest {
     const reader = FieldReader.asReader(fields);
-    return new KeyValidationRequest(Point.fromFields(reader), reader.readField());
+    return new KeyValidationRequest(PublicKey.fromFields(reader), reader.readField());
   }
 
   isEmpty() {
@@ -55,10 +57,10 @@ export class KeyValidationRequest {
   }
 
   static empty() {
-    return new KeyValidationRequest(Point.ZERO, Fr.ZERO);
+    return new KeyValidationRequest(PublicKey.ZERO, Fr.ZERO);
   }
 
   static async random() {
-    return new KeyValidationRequest(await Point.random(), Fr.random());
+    return new KeyValidationRequest(await PublicKey.random(), Fr.random());
   }
 }

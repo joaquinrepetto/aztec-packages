@@ -696,7 +696,7 @@ export class RPCTranslator {
     // with two fields: `some` (a boolean) and `value` (a field array in this case).
     if (result === undefined) {
       // No data was found so we set `some` to 0 and pad `value` with zeros get the correct return size.
-      return toForeignCallResult([toSingle(new Fr(0)), toArray(Array(13).fill(new Fr(0)))]);
+      return toForeignCallResult([toSingle(new Fr(0)), toArray(Array(9).fill(new Fr(0)))]);
     } else {
       // Data was found so we set `some` to 1 and return it along with `value`.
       return toForeignCallResult([
@@ -1156,15 +1156,11 @@ export class RPCTranslator {
     foreignAddress: ForeignCallSingle,
     foreignEphPKField0: ForeignCallSingle,
     foreignEphPKField1: ForeignCallSingle,
-    foreignEphPKField2: ForeignCallSingle,
     foreignContractAddress: ForeignCallSingle,
   ) {
     const address = AztecAddress.fromField(fromSingle(foreignAddress));
-    const ephPK = Point.fromFields([
-      fromSingle(foreignEphPKField0),
-      fromSingle(foreignEphPKField1),
-      fromSingle(foreignEphPKField2),
-    ]);
+    const [x, y] = [foreignEphPKField0, foreignEphPKField1].map(fromSingle);
+    const ephPK = Point.fromFields([x, y, new Fr(x.isZero() && y.isZero())]);
     const contractAddress = AztecAddress.fromField(fromSingle(foreignContractAddress));
 
     const secret = await this.handlerAsUtility().getSharedSecret(address, ephPK, contractAddress);

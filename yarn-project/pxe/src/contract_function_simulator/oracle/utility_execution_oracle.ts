@@ -3,7 +3,6 @@ import type { BlockNumber } from '@aztec/foundation/branded-types';
 import { uniqueBy } from '@aztec/foundation/collection';
 import { Aes128 } from '@aztec/foundation/crypto/aes128';
 import { Fr } from '@aztec/foundation/curves/bn254';
-import { Point } from '@aztec/foundation/curves/grumpkin';
 import { LogLevels, type Logger, createLogger } from '@aztec/foundation/log';
 import type { MembershipWitness } from '@aztec/foundation/trees';
 import type { KeyStore } from '@aztec/key-store';
@@ -24,7 +23,7 @@ import type { CompleteAddress, ContractInstance, PartialAddress } from '@aztec/s
 import { siloNullifier } from '@aztec/stdlib/hash';
 import type { AztecNode } from '@aztec/stdlib/interfaces/server';
 import type { KeyValidationRequest } from '@aztec/stdlib/kernel';
-import { type PublicKeys, computeAddressSecret } from '@aztec/stdlib/keys';
+import { PublicKey, type PublicKeys, computeAddressSecret } from '@aztec/stdlib/keys';
 import { MessageContext, deriveAppSiloedSharedSecret } from '@aztec/stdlib/logs';
 import { getNonNullifiedL1ToL2MessageWitness } from '@aztec/stdlib/messaging';
 import type { NoteStatus } from '@aztec/stdlib/note';
@@ -873,7 +872,7 @@ export class UtilityExecutionOracle implements IMiscOracle, IUtilityExecutionOra
    * @param contractAddress - The contract address for app-siloing (validated against execution context).
    * @returns The app-siloed shared secret as a Field.
    */
-  public async getSharedSecret(address: AztecAddress, ephPk: Point, contractAddress: AztecAddress): Promise<Fr> {
+  public async getSharedSecret(address: AztecAddress, ephPk: PublicKey, contractAddress: AztecAddress): Promise<Fr> {
     if (!contractAddress.equals(this.contractAddress)) {
       throw new Error(
         `getSharedSecret called with contract address ${contractAddress}, expected ${this.contractAddress}`,
