@@ -21,7 +21,7 @@ export type DiagnosticsData = {
   headers: http.IncomingHttpHeaders;
 };
 
-export type DiagnosticsMiddleware = (ctx: DiagnosticsData, next: () => Promise<void>) => Promise<void>;
+export type DiagnosticsHandler = (ctx: DiagnosticsData, processRequest: () => Promise<any>) => Promise<any>;
 
 export type SafeJsonRpcServerConfig = {
   /** Maximum batch size for batched rpc requests */
@@ -55,6 +55,8 @@ export class SafeJsonRpcServer {
     private readonly healthCheck: StatusCheckFn = () => true,
     /** Additional middlewares */
     private extraMiddlewares: Application.Middleware[] = [],
+    /** Per-RPC diagnostics handler */
+    private diagnosticsHandler?: DiagnosticsHandler,
     /** Logger */
     private log = createLogger('json-rpc:server'),
   ) {
@@ -155,7 +157,7 @@ export class SafeJsonRpcServer {
           };
           return;
         }
-        const resp = await this.processBatch(ctx.request.body);
+        const resp = await this.processBatch(ctx.request.body, ctx.request.headers);
         if (Array.isArray(resp)) {
           ctx.status = 200;
           ctx.body = resp;
@@ -164,7 +166,7 @@ export class SafeJsonRpcServer {
           ctx.body = resp;
         }
       } else {
-        const resp = await this.processRequest(ctx.request.body);
+        const resp = await this.processRequest(ctx.request.body, ctx.request.headers);
         if ('error' in resp) {
           ctx.status = this.config.http200OnError ? 200 : 400;
         }
@@ -176,11 +178,11 @@ export class SafeJsonRpcServer {
     return router;
   }
 
-  private async processBatch(requests: any[]) {
+  private async processBatch(requests: any[], headers: http.IncomingHttpHeaders) {
     if (requests.length === 0) {
       return { jsonrpc: '2.0', error: { code: -32600, message: 'Invalid Request' }, id: null };
     }
-    const results = await Promise.allSettled(requests.map(req => this.processRequest(req)));
+    const results = await Promise.allSettled(requests.map(req => this.processRequest(req, headers)));
     return results.map(res => {
       if (res.status === 'fulfilled') {
         return res.value;
@@ -191,7 +193,14 @@ export class SafeJsonRpcServer {
     });
   }
 
-  private async processRequest(request: any) {
+  private async processRequest(request: any, headers: http.IncomingHttpHeaders): Promise<any> {
+    const diagnosticsData = this.getDiagnosticsData(request, headers);
+    return this.diagnosticsHandler
+      ? await this.diagnosticsHandler(diagnosticsData, () => this.processRequestBody(request))
+      : await this.processRequestBody(request);
+  }
+
+  private async processRequestBody(request: any) {
     if (!request || typeof request !== 'object') {
       return { jsonrpc: '2.0', error: { code: -32600, message: 'Invalid Request' }, id: null };
     }
@@ -227,6 +236,16 @@ export class SafeJsonRpcServer {
         }
       }
     }
+  }
+
+  private getDiagnosticsData(request: any, headers: http.IncomingHttpHeaders): DiagnosticsData {
+    return {
+      id:
+        typeof request?.id === 'number' || typeof request?.id === 'string' || request?.id === null ? request.id : null,
+      method: typeof request?.method === 'string' && request.method.length > 0 ? request.method : 'unknown',
+      params: Array.isArray(request?.params) ? request.params : [],
+      headers,
+    };
   }
 
   /**
@@ -379,6 +398,7 @@ export type SafeJsonRpcServerOptions = Partial<
     healthCheck: StatusCheckFn;
     log: Logger;
     middlewares: Application.Middleware[];
+    diagnosticsHandler: DiagnosticsHandler;
   }
 >;
 
@@ -391,10 +411,10 @@ export function createNamespacedSafeJsonRpcServer(
   handlers: NamespacedApiHandlers,
   options: Omit<SafeJsonRpcServerOptions, 'healthcheck'> = {},
 ): SafeJsonRpcServer {
-  const { middlewares, log } = options;
+  const { diagnosticsHandler, middlewares, log } = options;
   const proxy = new NamespacedSafeJsonProxy(handlers);
   const healthCheck = makeAggregateHealthcheck(handlers, log);
-  return new SafeJsonRpcServer(proxy, options, healthCheck, middlewares, log);
+  return new SafeJsonRpcServer(proxy, options, healthCheck, middlewares, diagnosticsHandler, log);
 }
 
 export function createSafeJsonRpcServer<T extends object = any>(
@@ -402,9 +422,9 @@ export function createSafeJsonRpcServer<T extends object = any>(
   schema: ApiSchemaFor<T>,
   options: SafeJsonRpcServerOptions = {},
 ) {
-  const { log, healthCheck, middlewares: extraMiddlewares } = options;
+  const { diagnosticsHandler, log, healthCheck, middlewares: extraMiddlewares } = options;
   const proxy = new SafeJsonProxy(handler, schema);
-  return new SafeJsonRpcServer(proxy, options, healthCheck, extraMiddlewares, log);
+  return new SafeJsonRpcServer(proxy, options, healthCheck, extraMiddlewares, diagnosticsHandler, log);
 }
 
 /**

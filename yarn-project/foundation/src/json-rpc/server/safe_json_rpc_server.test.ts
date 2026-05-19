@@ -170,6 +170,59 @@ describe('SafeJsonRpcServer', () => {
     });
   });
 
+  describe('diagnostics handler', () => {
+    it('runs once per JSON-RPC request with parsed metadata and headers', async () => {
+      const calls: Array<{
+        header: string | string[] | undefined;
+        id: number | string | null;
+        method: string;
+        params: any[];
+      }> = [];
+      server = createSafeJsonRpcServer<TestStateApi>(testState, TestStateSchema, {
+        maxBatchSize: 10,
+        diagnosticsHandler: async (ctx, processRequest) => {
+          calls.push({
+            header: ctx.headers['x-test-header'],
+            id: ctx.id,
+            method: ctx.method,
+            params: ctx.params,
+          });
+          return await processRequest();
+        },
+      });
+
+      const resp = await request(server.getApp().callback())
+        .post('/')
+        .set({ 'x-test-header': 'present' })
+        .send([
+          { jsonrpc: '2.0', method: 'getNote', params: [1], id: 42 },
+          { jsonrpc: '2.0', method: 'clear', params: [], id: 'clear' },
+        ]);
+
+      expect(resp.status).toEqual(200);
+      expect(calls).toEqual([
+        { header: 'present', id: 42, method: 'getNote', params: [1] },
+        { header: 'present', id: 'clear', method: 'clear', params: [] },
+      ]);
+    });
+
+    it('allows diagnostics handler to observe returned errors', async () => {
+      const results: string[] = [];
+      server = createSafeJsonRpcServer<TestStateApi>(testState, TestStateSchema, {
+        diagnosticsHandler: async (ctx, processRequest) => {
+          const response = await processRequest();
+          results.push(`${ctx.method}:${response.error?.message ?? 'ok'}`);
+          return response;
+        },
+      });
+
+      const resp = await send({ jsonrpc: '2.0', method: 'fail', params: [], id: 'abc' });
+
+      expect(resp.status).toEqual(400);
+      expect(results).toEqual(['fail:Test state failed']);
+    });
+  });
+
   describe('namespaced', () => {
     let lettersState: TestState;
     let numbersState: TestState;
