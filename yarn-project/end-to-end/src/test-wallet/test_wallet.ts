@@ -122,6 +122,7 @@ export class TestWallet extends BaseWallet {
    * Hashes and registers the stub class for every supported account type with PXE, populating
    * stubClassIds. Called on wallet initialization.
    */
+  // docs:start:init-stub-classes
   private async initStubClasses(): Promise<void> {
     const { id: schnorrClassId } = await getContractClassFromArtifact(StubSchnorrAccountContractArtifact);
     await this.pxe.registerContractClass(StubSchnorrAccountContractArtifact);
@@ -134,10 +135,12 @@ export class TestWallet extends BaseWallet {
     this.stubClassIds.set('ecdsasecp256k1', ecdsaClassId);
     this.stubClassIds.set('ecdsasecp256r1', ecdsaClassId);
   }
+  // docs:end:init-stub-classes
 
   /**
    * Builds contract overrides for all provided addresses by replacing their account contracts with stub implementations.
    */
+  // docs:start:build-account-overrides
   protected async buildAccountOverrides(addresses: AztecAddress[]): Promise<ContractOverrides> {
     const accounts = await this.getAccounts();
     const contracts: ContractOverrides = {};
@@ -170,6 +173,7 @@ export class TestWallet extends BaseWallet {
 
     return contracts;
   }
+  // docs:end:build-account-overrides
 
   protected accounts: Map<string, { account: Account; type: AccountType }> = new Map();
 
@@ -272,6 +276,7 @@ export class TestWallet extends BaseWallet {
     return account.createAuthWit(intentInnerHash, chainInfo);
   }
 
+  // docs:start:simulate-via-entrypoint-override
   protected override async simulateViaEntrypoint(
     executionPayload: ExecutionPayload,
     opts: SimulateViaEntrypointOptions,
@@ -334,6 +339,7 @@ export class TestWallet extends BaseWallet {
     const appCallOffset = await this.computeAppCallOffset(from, feeOptions);
     return TxSimulationResultWithAppOffset.fromResultAndOffset(result, appCallOffset);
   }
+  // docs:end:simulate-via-entrypoint-override
 
   async proveTx(exec: ExecutionPayload, opts: Omit<SendOptions, 'wait'>): Promise<ProvenTx> {
     const fee = await this.completeFeeOptions({

@@ -119,6 +119,7 @@ describe('Kernelless simulation', () => {
         nonceForAuthwits,
       );
 
+      // docs:start:kernelless-simulate-collect
       wallet.setSimulationMode('kernelless-override');
 
       const { offchainEffects } = await addLiquidityInteraction.simulate({
@@ -129,6 +130,7 @@ describe('Kernelless simulation', () => {
       expect(offchainEffects.length).toBe(2);
 
       const [token0AuthwitRequest, token1AuthwitRequest] = offchainEffects;
+      // docs:end:kernelless-simulate-collect
 
       // The contract that generates the authwit request
       expect(token0AuthwitRequest.contractAddress).toEqual(token0.address);
@@ -138,8 +140,10 @@ describe('Kernelless simulation', () => {
       expect(token0AuthwitRequest.data).toHaveLength(10);
       expect(token1AuthwitRequest.data).toHaveLength(10);
 
+      // docs:start:kernelless-decode-call-authorization
       const token0CallAuthorizationRequest = await CallAuthorizationRequest.fromFields(token0AuthwitRequest.data);
       const token1CallAuthorizationRequest = await CallAuthorizationRequest.fromFields(token1AuthwitRequest.data);
+      // docs:end:kernelless-decode-call-authorization
 
       expect(token0CallAuthorizationRequest.selector).toEqual(token1CallAuthorizationRequest.selector);
       expect(token0CallAuthorizationRequest.onBehalfOf).toEqual(liquidityProviderAddress);
@@ -213,6 +217,7 @@ describe('Kernelless simulation', () => {
       expect(token0AuthwitHash).toEqual(token0Authwit.requestHash);
       expect(token1AuthwitHash).toEqual(token1Authwit.requestHash);
 
+      // docs:start:kernelless-build-authwits-and-send
       const token0AuthwitFromOffchainEffect = await wallet.createAuthWit(liquidityProviderAddress, {
         consumer: token0.address,
         innerHash: token0CallAuthorizationRequest.innerHash,
@@ -229,6 +234,7 @@ describe('Kernelless simulation', () => {
           authWitnesses: [token0AuthwitFromOffchainEffect, token1AuthwitFromOffchainEffect],
         }),
       ).resolves.toBeDefined();
+      // docs:end:kernelless-build-authwits-and-send
     });
 
     it('produces matching gas estimates and fee payer between kernelless and with-kernels simulation', async () => {
